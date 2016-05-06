@@ -1,0 +1,10 @@
+#cloud-config
+system_info:
+  default_user:
+    name: admin
+    lock_passwd: true
+    gecos: Docker Registry Interactive User
+    groups: [wheel, adm, systemd-journal]
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    shell: /bin/bash
+

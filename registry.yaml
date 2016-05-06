@@ -1,0 +1,219 @@
+heat_template_version: 2014-10-16
+
+description: >
+  Docker private registry.
+
+parameters:
+  ssh_key_name:
+    type: string
+    description: name of ssh key to be provisioned on our server
+
+  external_network:
+    type: string
+    description: uuid/name of a network to use for floating ip addresses
+    default: public
+
+  server_image:
+    type: string
+    description: glance image used to boot the server
+
+  instance_flavor:
+    type: string
+    default: m1.small
+    description: flavor to use when booting the server
+
+  dns_nameserver:
+    type: string
+    description: address of a dns nameserver reachable in your environment
+    default: 8.8.8.8
+
+  fixed_network_cidr:
+    type: string
+    description: network range for fixed ip network
+    default: 10.1.0.0/24
+
+  wait_condition_timeout:
+    type: number
+    description : >
+      timeout for the Wait Conditions
+    default: 1000
+
+  k8s_version:
+    type: string
+    description : >
+      kubernetes version
+    default: 1.2.0
+
+  etcd_version:
+    type: string
+    description : >
+      etcd version
+    default: 2.2.1
+
+  flannel_version:
+    type: string
+    description : >
+      flannel version
+    default: 0.5.5
+
+resources:
+
+  ######################################################################
+  #
+  # wait conditions and signal.
+  #
+
+  master_wait_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  master_wait_condition:
+    type: OS::Heat::WaitCondition
+    depends_on: docker_registry
+    properties:
+      handle: {get_resource: master_wait_handle}
+      timeout: {get_param: wait_condition_timeout}
+
+  master_wc_notify:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config:
+        str_replace:
+          template: |
+            #!/bin/sh -v
+            wc_notify --data-binary '{"status": "SUCCESS"}'
+          params:
+            wc_notify: {get_attr: [master_wait_handle, curl_cli]}
+
+  ######################################################################
+  #
+  # network resources.  allocate a network and router for our server.
+  #
+
+  fixed_network:
+    type: OS::Neutron::Net
+
+  fixed_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      cidr: {get_param: fixed_network_cidr}
+      network: {get_resource: fixed_network}
+      dns_nameservers:
+        - {get_param: dns_nameserver}
+
+  extrouter:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: {get_param: external_network}
+
+  extrouter_inside:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: {get_resource: extrouter}
+      subnet: {get_resource: fixed_subnet}
+
+  ######################################################################
+  #
+  # security groups.  we need to permit network traffic of various
+  # sorts.
+  #
+
+  secgroup_base:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      rules:
+        - protocol: icmp
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+        - protocol: tcp # registry port
+          port_range_min: 5000
+          port_range_max: 5000
+        - remote_mode: remote_group_id
+
+
+  ######################################################################
+  #
+  # software configs.  these are components that are combined into
+  # a multipart MIME user-data archive.
+  #
+
+  write_params:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config:
+        str_replace:
+          template: {get_file: fragments/write-params.yaml}
+          params:
+            "$K8S_VERSION": {get_param: k8s_version}
+            "$ETCD_VERSION": {get_param: etcd_version}
+            "$FLANNEL_VERSION": {get_param: flannel_version}
+
+  registry_user:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/user.yaml}
+
+  provision_registry:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ungrouped
+      config: {get_file: fragments/install-registry.sh}
+
+  docker_registry_init:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+        - config: {get_resource: write_params}      
+        - config: {get_resource: registry_user}
+        - config: {get_resource: provision_registry}
+        - config: {get_resource: master_wc_notify}        
+
+  ######################################################################
+  #
+  # kubernetes master server.
+  #
+
+  docker_registry:
+    type: OS::Nova::Server
+    depends_on:
+      - extrouter_inside
+    properties:
+      image: {get_param: server_image}
+      flavor: {get_param: instance_flavor}
+      key_name: {get_param: ssh_key_name}
+      user_data_format: RAW
+      user_data: {get_resource: docker_registry_init}
+      networks:
+        - port: {get_resource: docker_registry_eth0}
+      name:
+        list_join: [-, [{get_param: "OS::stack_name"}, server]]
+
+  docker_registry_eth0:
+    type: OS::Neutron::Port
+    properties:
+      network: {get_resource: fixed_network}
+      security_groups:
+        - {get_resource: secgroup_base}
+      fixed_ips:
+        - subnet: {get_resource: fixed_subnet}
+      allowed_address_pairs:
+        - ip_address: 10.246.0.0/16
+      replacement_policy: AUTO
+
+  docker_registry_floating:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: {get_param: external_network}
+      port_id: {get_resource: docker_registry_eth0}
+
+
+outputs:
+
+  docker_registry:
+    value: {get_attr: [docker_registry_floating, floating_ip_address]}
+    description: >
+      This is the "public" IP address of the Docker registry server.

@@ -1,0 +1,10 @@
+#cloud-config
+merge_how: dict(recurse_array)+list(append)
+write_files:
+  - path: /etc/sysconfig/registry
+    owner: "root:root"
+    permissions: "0644"
+    content: |
+      K8S_VERSION=$K8S_VERSION
+      ETCD_VERSION=$ETCD_VERSION
+      FLANNEL_VERSION=$FLANNEL_VERSION
