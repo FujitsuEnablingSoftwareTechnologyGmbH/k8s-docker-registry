@@ -25,12 +25,20 @@ docker run -d -p 5000:5000 --name registry registry:2
 docker pull gcr.io/google_containers/etcd-amd64:${ETCD_VERSION}
 docker pull quay.io/coreos/flannel:${FLANNEL_VERSION}
 docker pull gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION}
+docker pull fest/addons_services:latest
+docker pull gcr.io/google_containers/pause:2.0
 
-docker tag gcr.io/google_containers/etcd-amd64:${ETCD_VERSION} localhost:5000/etcd-amd64:${ETCD_VERSION}
-docker push localhost:5000/etcd-amd64:${ETCD_VERSION}
+docker tag gcr.io/google_containers/etcd-amd64:${ETCD_VERSION} localhost:5000/gcr.io/google_containers/etcd-amd64:${ETCD_VERSION}
+docker push localhost:5000/gcr.io/google_containers/etcd-amd64:${ETCD_VERSION}
 
-docker tag quay.io/coreos/flannel:${FLANNEL_VERSION} localhost:5000/flannel:${FLANNEL_VERSION}
-docker push localhost:5000/flannel:${FLANNEL_VERSION}
+docker tag quay.io/coreos/flannel:${FLANNEL_VERSION} localhost:5000/quay.io/coreos/flannel:${FLANNEL_VERSION}
+docker push localhost:5000/quay.io/coreos/flannel:${FLANNEL_VERSION}
 
-docker tag gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} localhost:5000/hyperkube-amd64:v${K8S_VERSION}
-docker push localhost:5000/hyperkube-amd64:v${K8S_VERSION}
+docker tag gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} localhost:5000/gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION}
+docker push localhost:5000/gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION}
+
+docker tag fest/addons_services:latest localhost:5000/fest/addons_services:latest
+docker push localhost:5000/fest/addons_services:latest
+
+docker tag gcr.io/google_containers/pause:2.0 localhost:5000/gcr.io/google_containers/pause:2.0
+docker push localhost:5000/gcr.io/google_containers/pause:2.0

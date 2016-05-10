@@ -15,7 +15,7 @@ EXTERNAL_NETWORK=${EXTERNAL_NETWORK:-public}
 FIXED_NETWORK_CIDR=${FIXED_NETWORK_CIDR:-10.1.0.0/24}
 
 # Image id which will be used for kubernetes stack
-IMAGE_ID=${IMAGE_ID:-5285a928-2bfb-4416-a307-4116bbce201e}
+IMAGE_ID=${IMAGE_ID:-0b9fec74-1f5b-4a08-9812-770b23a2fac8}
 
 # DNS server address
 DNS_SERVER=${DNS_SERVER:-8.8.8.8}
